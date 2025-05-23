@@ -13,7 +13,7 @@ export default function PredictByTeamIDs() {
   const [isLoading, setIsLoading] = useState(false); // Nuevo estado
 
   useEffect(() => {
-    fetch("http://localhost:8008/equipos")
+    fetch("/api/equipos")
       .then((res) => res.json())
       .then((data: Team[]) => {
         setTeams(data);
@@ -36,7 +36,7 @@ export default function PredictByTeamIDs() {
     setIsLoading(true);
     setProbability(null);
 
-    const res = await fetch("http://localhost:8008/predecir", {
+    const res = await fetch("/api/predecir", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
