@@ -57,7 +57,7 @@ export default function PredictPage() {
     const eq1Data = buildTeamData(teamLocal, 1);
     const eq2Data = buildTeamData(teamVisitor, 0);
 
-    const res = await fetch("http://localhost:8008//predecir-estadisticas", {
+    const res = await fetch("/api/predecir-estadisticas",, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ equipo1: eq1Data, equipo2: eq2Data }),
