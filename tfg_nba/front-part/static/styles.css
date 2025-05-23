@@ -1,0 +1,278 @@
+/* Existing styles */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  background: #ffffff;
+  border-radius: 1rem;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+.title {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 2rem;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 2rem;
+  justify-content: center;
+  min-height: 100%;
+}
+
+.form-box {
+  padding: 1.5rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 0.75rem;
+  background: #f9f9f9;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.form-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: #1d4ed8;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+  color: #333;
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 0.375rem;
+}
+
+.button-container {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 0.5rem; 
+}
+
+.submit-button {
+  background-color: #1d4ed8;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 0.75rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.submit-button:hover {
+  background-color: #2563eb;
+}
+
+.result-box {
+  text-align: center;
+  background: #e0f2fe;
+  padding: 1.5rem;
+  margin-top: 2rem;
+  border-radius: 0.75rem;
+}
+
+.result-title {
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.result-text {
+  font-size: 1.125rem;
+}
+
+.highlight {
+  color: #1d4ed8;
+  font-weight: bold;
+}
+
+.percentage {
+  color: #059669;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+/* NEW STYLES FOR NBA PREDICTION COMPONENT */
+
+/* Main prediction container */
+.prediction-container {
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 1rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  color: white;
+}
+
+/* Prediction title */
+.prediction-title {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 1.5rem;
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Form styling */
+.prediction-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Form groups */
+.prediction-form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Labels */
+.prediction-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: white;
+  font-size: 1.1rem;
+}
+
+/* Select inputs */
+.prediction-select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.prediction-select:focus {
+  outline: none;
+  border-color: #fbbf24;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.2);
+}
+
+/* Submit button */
+.prediction-submit {
+  background: linear-gradient(45deg, #f59e0b, #fbbf24);
+  color: white;
+  padding: 0.875rem 1.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: bold;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.prediction-submit:hover {
+  background: linear-gradient(45deg, #d97706, #f59e0b);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+}
+
+.prediction-submit:active {
+  transform: translateY(0);
+}
+
+/* Result container */
+.prediction-result {
+  margin-top: 2rem;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  text-align: center;
+}
+
+/* Result text */
+.prediction-result-text {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 0.5rem;
+}
+
+/* Percentage display */
+.prediction-percentage {
+  color: #fbbf24;
+  font-size: 2rem;
+  font-weight: bold;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+  display: inline-block;
+  animation: pulse 2s infinite;
+}
+
+/* Pulse animation for percentage */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .prediction-container {
+    margin: 1rem;
+    padding: 1rem;
+  }
+  
+  .prediction-title {
+    font-size: 1.5rem;
+  }
+  
+  .prediction-percentage {
+    font-size: 1.5rem;
+  }
+}
+
+.Header {
+  width: 100%;
+  height: 50px;
+  background-color: #333;
+  color: white;
+  text-align: center;
+  line-height: 50px;
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  padding-left: 20px;
+  align-items: center;
+  border-bottom: 1px solid #000;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+  margin: 0;
+}
+
+.Header a {
+  color: white;
+  text-decoration: none;
+}
+
+.Header a:hover {
+  text-decoration: underline;
+  color: #ddd; /* Opcional: un gris claro al pasar el ratón */
+}
