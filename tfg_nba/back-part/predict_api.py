@@ -33,6 +33,7 @@ class EstadisticasEquipos(BaseModel):
     equipo1: dict
     equipo2: dict
 
+
 def obtener_caracteristicas_equipo_con_mvp(id_equipo, temporada='2024-25'):
 
     registro_juegos = teamgamelog.TeamGameLog(team_id=id_equipo, season=temporada, season_type_all_star='Regular Season')
@@ -64,7 +65,7 @@ def obtener_caracteristicas_equipo_con_mvp(id_equipo, temporada='2024-25'):
 
     df_todos = pd.concat(estadisticas_equipo)
     perdidas_temp = df_todos['TO'].mean()
-
+    
     estadisticas = {
         'teamScore_prom50': df_todos['PTS'].mean(),
         'assists_prom50': df_todos['AST'].mean(),
@@ -139,6 +140,7 @@ def predecir_desde_ids(entrada: EquiposInput):
 
     return {"probabilidad_victoria_local": round(probabilidad * 100, 2)}
 
+    
 @app.post("/predecir-estadisticas")
 def predecir_con_estadisticas(datos: EstadisticasEquipos):
     frontend_a_modelo = {
@@ -182,4 +184,4 @@ def predecir_con_estadisticas(datos: EstadisticasEquipos):
     X_escalado = escalador.transform(X_imputado)
     probabilidad = modelo.predict_proba(X_escalado)[0][1]
 
-    return {"probabilidad_victoria_local": round(probabilidad * 100, 2)}
+    return {"probabilidad_victoria_local": round(probabilidad * 100, 2)} 
