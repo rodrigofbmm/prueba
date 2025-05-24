@@ -5,19 +5,21 @@ import joblib
 import numpy as np
 import pandas as pd
 import time
+import requests
 from nba_api.stats.static import teams as nba_teams
 from nba_api.stats.endpoints import teamgamelog, boxscoretraditionalv2, playergamelog
 from nba_api.stats.library.http import NBAStatsHTTP  # <-- nuevo import
 from fastapi.middleware.cors import CORSMiddleware
 
-# ⛔️ Agrega headers realistas para evitar bloqueos
-NBAStatsHTTP.HEADERS.update({
+session = requests.Session()
+session.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept-Language": "en-US,en;q=0.9",
     "Referer": "https://www.nba.com/",
     "Origin": "https://www.nba.com",
-    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Encoding": "gzip, deflate, br"
 })
+NBAStatsHTTP._SESSION = session  # <- clave
 
 # Load models
 modelo = joblib.load("../modelo-definitivo/mejor_modelo.pkl")
