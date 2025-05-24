@@ -1,12 +1,16 @@
+# BACKEND (FastAPI) - serve teams from NBA API and predict with adjusted model keys
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import numpy as np
 import pandas as pd
 import time
+import os
+import json
+from datetime import datetime, timedelta
 from nba_api.stats.static import teams as nba_teams
 from nba_api.stats.endpoints import teamgamelog, boxscoretraditionalv2, playergamelog
+from fastapi.middleware.cors import CORSMiddleware
 from requests.exceptions import ReadTimeout
 
 # Load models
@@ -14,12 +18,16 @@ modelo = joblib.load("../modelo-definitivo/mejor_modelo.pkl")
 escalador = joblib.load("../modelo-definitivo/escalado_equipo.pkl")
 imputador = joblib.load("../modelo-definitivo/imputo_equipo.pkl")
 
+# Cache directory
+CACHE_DIR = "/home/ec2-user/app/cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
 app = FastAPI()
 
-# Allow frontend (Deno) to connect
+# Enable CORS for connecting with Deno frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # You can restrict to frontend URL in prod
+    allow_origins=["http://localhost:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,6 +42,17 @@ class EstadisticasEquipos(BaseModel):
     equipo2: dict
 
 def obtener_caracteristicas_equipo_con_mvp(id_equipo, temporada='2024-25'):
+    cache_file = os.path.join(CACHE_DIR, f"team_{id_equipo}.json")
+
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, "r") as f:
+                cached = json.load(f)
+            if datetime.fromisoformat(cached["timestamp"]) > datetime.utcnow() - timedelta(hours=24):
+                return cached["data"]
+        except Exception as e:
+            print(f"⚠️ Failed to load cache: {e}")
+
     try:
         registro_juegos = teamgamelog.TeamGameLog(
             team_id=id_equipo, season=temporada, season_type_all_star='Regular Season'
@@ -52,8 +71,8 @@ def obtener_caracteristicas_equipo_con_mvp(id_equipo, temporada='2024-25'):
             caja = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=id_juego)
             df_jugadores = caja.get_data_frames()[0]
             df_equipos = caja.get_data_frames()[1]
-        except Exception as e:
-            continue  # skip failed game
+        except Exception:
+            continue
 
         jugadores_equipo = df_jugadores[df_jugadores['TEAM_ID'] == id_equipo]
         if jugadores_equipo.empty:
@@ -114,6 +133,12 @@ def obtener_caracteristicas_equipo_con_mvp(id_equipo, temporada='2024-25'):
         estadisticas['MVP_REB'] * 0.5 +
         10 * 0.3
     )
+
+    try:
+        with open(cache_file, "w") as f:
+            json.dump({"timestamp": datetime.utcnow().isoformat(), "data": estadisticas}, f)
+    except Exception as e:
+        print(f"⚠️ Failed to write cache: {e}")
 
     return estadisticas
 
