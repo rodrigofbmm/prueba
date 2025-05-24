@@ -37,7 +37,7 @@ class EstadisticasEquipos(BaseModel):
 def obtener_caracteristicas_equipo_con_mvp(id_equipo, temporada='2024-25'):
 
     registro_juegos = teamgamelog.TeamGameLog(team_id=id_equipo, season=temporada, season_type_all_star='Regular Season')
-    juegos = registro_juegos.get_data_frames()[0].head(5)
+    juegos = registro_juegos.get_data_frames()[0].head(2)
 
     estadisticas_equipo = []
     ids_mvp = []
