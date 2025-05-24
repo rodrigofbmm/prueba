@@ -5,24 +5,10 @@ import joblib
 import numpy as np
 import pandas as pd
 import time
-import requests
 from nba_api.stats.static import teams as nba_teams
 from nba_api.stats.endpoints import teamgamelog, boxscoretraditionalv2, playergamelog
-from nba_api.stats.library.http import NBAStatsHTTP  # <-- nuevo import
 from fastapi.middleware.cors import CORSMiddleware
 
-session = requests.Session()
-session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.nba.com/",
-    "Origin": "https://www.nba.com",
-    "Connection": "keep-alive",
-    "Accept": "*/*",
-    "Host": "stats.nba.com",
-    "Accept-Encoding": "gzip, deflate, br"
-})
-NBAStatsHTTP._SESSION = session
 # Load models
 modelo = joblib.load("../modelo-definitivo/mejor_modelo.pkl")
 escalador = joblib.load("../modelo-definitivo/escalado_equipo.pkl")
@@ -46,6 +32,7 @@ class EquiposInput(BaseModel):
 class EstadisticasEquipos(BaseModel):
     equipo1: dict
     equipo2: dict
+
 
 def obtener_caracteristicas_equipo_con_mvp(id_equipo, temporada='2024-25'):
 
@@ -71,13 +58,14 @@ def obtener_caracteristicas_equipo_con_mvp(id_equipo, temporada='2024-25'):
         fila_equipo = df_equipos[df_equipos['TEAM_ID'] == id_equipo]
         estadisticas_equipo.append(fila_equipo)
         time.sleep(1)
+        
 
     if not estadisticas_equipo:
         raise ValueError("No se pudieron recuperar estadísticas del equipo")
 
     df_todos = pd.concat(estadisticas_equipo)
     perdidas_temp = df_todos['TO'].mean()
-
+    
     estadisticas = {
         'teamScore_prom50': df_todos['PTS'].mean(),
         'assists_prom50': df_todos['AST'].mean(),
@@ -99,6 +87,7 @@ def obtener_caracteristicas_equipo_con_mvp(id_equipo, temporada='2024-25'):
     puntos_mvp, asistencias_mvp, rebotes_mvp, porcentaje_tiros_mvp = [], [], [], []
 
     for id_jugador in ids_mvp:
+
         registros = playergamelog.PlayerGameLog(player_id=id_jugador, season=temporada)
         df_mvp = registros.get_data_frames()[0].head(10)
         puntos_mvp.append(df_mvp['PTS'].mean())
@@ -107,21 +96,18 @@ def obtener_caracteristicas_equipo_con_mvp(id_equipo, temporada='2024-25'):
         porcentaje_tiros_mvp.append(df_mvp['FG_PCT'].mean())
         time.sleep(1)
 
+
     estadisticas['MVP_PTS'] = np.mean(puntos_mvp) if puntos_mvp else 0
     estadisticas['MVP_AST'] = np.mean(asistencias_mvp) if asistencias_mvp else 0
     estadisticas['MVP_REB'] = np.mean(rebotes_mvp) if rebotes_mvp else 0
     estadisticas['MVP_FG_PCT'] = np.mean(porcentaje_tiros_mvp) if porcentaje_tiros_mvp else 0
-    estadisticas['IMPACTO_MVP'] = (
-        estadisticas['MVP_PTS'] * 1.0 +
-        estadisticas['MVP_AST'] * 0.7 +
-        estadisticas['MVP_REB'] * 0.5 +
-        10 * 0.3
-    )
+    estadisticas['IMPACTO_MVP'] = (estadisticas['MVP_PTS'] * 1.0 + estadisticas['MVP_AST'] * 0.7 + estadisticas['MVP_REB'] * 0.5 + 10 * 0.3)
 
     return estadisticas
 
 @app.get("/equipos")
 def obtener_equipos():
+
     todos_equipos = nba_teams.get_teams()
     equipos = [{"id": t["id"], "name": t["full_name"]} for t in sorted(todos_equipos, key=lambda x: x["full_name"])]
     return equipos
@@ -132,6 +118,7 @@ def predecir_desde_ids(entrada: EquiposInput):
     eq2 = obtener_caracteristicas_equipo_con_mvp(entrada.equipo2_id)
     eq2['home'] = 0
 
+        # Usar el orden exacto del modelo (igual que en predict-stats)
     claves_modelo = [
         'teamScore_prom50', 'assists_prom50', 'blocks_prom50', 'steals_prom50',
         'fieldGoalsPercentage_prom50', 'threePointersPercentage_prom50', 'freeThrowsPercentage_prom50',
@@ -153,6 +140,7 @@ def predecir_desde_ids(entrada: EquiposInput):
 
     return {"probabilidad_victoria_local": round(probabilidad * 100, 2)}
 
+    
 @app.post("/predecir-estadisticas")
 def predecir_con_estadisticas(datos: EstadisticasEquipos):
     frontend_a_modelo = {
@@ -196,4 +184,4 @@ def predecir_con_estadisticas(datos: EstadisticasEquipos):
     X_escalado = escalador.transform(X_imputado)
     probabilidad = modelo.predict_proba(X_escalado)[0][1]
 
-    return {"probabilidad_victoria_local": round(probabilidad * 100, 2)}
+    return {"probabilidad_victoria_local": round(probabilidad * 100, 2)} 
