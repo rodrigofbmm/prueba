@@ -17,10 +17,12 @@ session.headers.update({
     "Accept-Language": "en-US,en;q=0.9",
     "Referer": "https://www.nba.com/",
     "Origin": "https://www.nba.com",
+    "Connection": "keep-alive",
+    "Accept": "*/*",
+    "Host": "stats.nba.com",
     "Accept-Encoding": "gzip, deflate, br"
 })
-NBAStatsHTTP._SESSION = session  # <- clave
-
+NBAStatsHTTP._SESSION = session
 # Load models
 modelo = joblib.load("../modelo-definitivo/mejor_modelo.pkl")
 escalador = joblib.load("../modelo-definitivo/escalado_equipo.pkl")
