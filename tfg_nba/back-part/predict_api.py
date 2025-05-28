@@ -116,8 +116,10 @@ def obtener_datos_api(id_equipo):
 def obtener_estadisticas_equipo(id_equipo):
     try:
         with concurrent.futures.ThreadPoolExecutor() as ex:
+            print(f"Obteniendo datos desde la API para equipo {id_equipo}")
             return ex.submit(obtener_datos_api, id_equipo).result(timeout=15)
     except:
+        print(f"Usando cache para equipo {id_equipo}")
         return cache.get(str(id_equipo), {})
 
 @app.get("/equipos")
