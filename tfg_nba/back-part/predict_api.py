@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import json
 import concurrent.futures
+from nba_api.stats.static import teams as nba_teams
 
 # Cargar modelos
 modelo = joblib.load("../modelo-definitivo/mejor_modelo.pkl")
@@ -16,10 +17,10 @@ imputador = joblib.load("../modelo-definitivo/imputo_equipo.pkl")
 with open("estadisticas_precalculadas.json") as f:
     estadisticas_cacheadas = json.load(f)
 
-# App
+# Crear la app
 app = FastAPI()
 
-# Middleware CORS
+# Configurar CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pydantic
+# Modelos Pydantic
 class EquiposInput(BaseModel):
     equipo1_id: int
     equipo2_id: int
@@ -37,7 +38,7 @@ class EstadisticasEquipos(BaseModel):
     equipo1: dict
     equipo2: dict
 
-# Función mejorada
+# Obtener estadísticas con timeout
 def obtener_estadisticas_equipo(id_equipo, temporada="2024-25"):
     def fetch_data():
         from nba_api.stats.endpoints import teamgamelog, boxscoretraditionalv2, playergamelog
@@ -117,10 +118,17 @@ def obtener_estadisticas_equipo(id_equipo, temporada="2024-25"):
             future = executor.submit(fetch_data)
             return future.result(timeout=30)
     except Exception as e:
-        print(f"⚠️ Tiempo excedido o error en NBA API para equipo {id_equipo}. Usando datos cacheados. Error: {e}")
+        print(f"⚠️ Tiempo excedido o error NBA API para equipo {id_equipo}: {e}")
         return estadisticas_cacheadas.get(str(id_equipo), {})
 
-# Endpoints
+# Endpoint para obtener equipos
+@app.get("/equipos")
+def obtener_equipos():
+    equipos = nba_teams.get_teams()
+    equipos_ordenados = sorted(equipos, key=lambda x: x["full_name"])
+    return [{"id": e["id"], "name": e["full_name"]} for e in equipos_ordenados]
+
+# Predicción desde IDs
 @app.post("/predecir")
 def predecir_desde_ids(entrada: EquiposInput):
     eq1 = obtener_estadisticas_equipo(entrada.equipo1_id)
@@ -148,6 +156,7 @@ def predecir_desde_ids(entrada: EquiposInput):
 
     return {"probabilidad_victoria_local": round(probabilidad * 100, 2)}
 
+# Predicción desde estadísticas manuales
 @app.post("/predecir-estadisticas")
 def predecir_con_estadisticas(datos: EstadisticasEquipos):
     mapeo = {
