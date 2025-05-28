@@ -1,26 +1,25 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import numpy as np
 import pandas as pd
 import json
-import time
-from fastapi.middleware.cors import CORSMiddleware
-from nba_api.stats.static import teams as nba_teams
-from nba_api.stats.endpoints import teamgamelog, boxscoretraditionalv2, playergamelog
+import concurrent.futures
 
 # Cargar modelos
 modelo = joblib.load("../modelo-definitivo/mejor_modelo.pkl")
 escalador = joblib.load("../modelo-definitivo/escalado_equipo.pkl")
 imputador = joblib.load("../modelo-definitivo/imputo_equipo.pkl")
 
-# Estadísticas precalculadas como respaldo
+# Cargar estadísticas precalculadas
 with open("estadisticas_precalculadas.json") as f:
     estadisticas_cacheadas = json.load(f)
 
+# App
 app = FastAPI()
 
-# CORS para frontend
+# Middleware CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,6 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Pydantic
 class EquiposInput(BaseModel):
     equipo1_id: int
     equipo2_id: int
@@ -37,8 +37,12 @@ class EstadisticasEquipos(BaseModel):
     equipo1: dict
     equipo2: dict
 
+# Función mejorada
 def obtener_estadisticas_equipo(id_equipo, temporada="2024-25"):
-    try:
+    def fetch_data():
+        from nba_api.stats.endpoints import teamgamelog, boxscoretraditionalv2, playergamelog
+        import time
+
         registro_juegos = teamgamelog.TeamGameLog(team_id=id_equipo, season=temporada, season_type_all_star='Regular Season')
         juegos = registro_juegos.get_data_frames()[0].head(10)
 
@@ -84,7 +88,6 @@ def obtener_estadisticas_equipo(id_equipo, temporada="2024-25"):
             'home': 1
         }
 
-        # MVP Stats
         puntos, asistencias, rebotes, fg_pct = [], [], [], []
         for pid in set(ids_mvp):
             df_mvp = playergamelog.PlayerGameLog(player_id=pid, season=temporada).get_data_frames()[0].head(10)
@@ -101,30 +104,30 @@ def obtener_estadisticas_equipo(id_equipo, temporada="2024-25"):
             'MVP_FG_PCT': np.mean(fg_pct) if fg_pct else 0,
         })
         estadisticas['IMPACTO_MVP'] = (
-            estadisticas['MVP_PTS'] * 1.0 + 
-            estadisticas['MVP_AST'] * 0.7 + 
-            estadisticas['MVP_REB'] * 0.5 + 
+            estadisticas['MVP_PTS'] * 1.0 +
+            estadisticas['MVP_AST'] * 0.7 +
+            estadisticas['MVP_REB'] * 0.5 +
             10 * 0.3
         )
 
         return estadisticas
 
+    try:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(fetch_data)
+            return future.result(timeout=30)
     except Exception as e:
-        print(f"⚠️ Error al obtener datos desde NBA API: {e}")
+        print(f"⚠️ Tiempo excedido o error en NBA API para equipo {id_equipo}. Usando datos cacheados. Error: {e}")
         return estadisticas_cacheadas.get(str(id_equipo), {})
 
-@app.get("/equipos")
-def obtener_equipos():
-    equipos = nba_teams.get_teams()
-    return [{"id": e["id"], "name": e["full_name"]} for e in sorted(equipos, key=lambda x: x["full_name"])]
-
+# Endpoints
 @app.post("/predecir")
 def predecir_desde_ids(entrada: EquiposInput):
     eq1 = obtener_estadisticas_equipo(entrada.equipo1_id)
     eq2 = obtener_estadisticas_equipo(entrada.equipo2_id)
-    eq2["home"] = 0  # Visitante
+    eq2["home"] = 0
 
-    claves_modelo = [
+    claves = [
         'teamScore_prom50', 'assists_prom50', 'blocks_prom50', 'steals_prom50',
         'fieldGoalsPercentage_prom50', 'threePointersPercentage_prom50', 'freeThrowsPercentage_prom50',
         'reboundsTotal_prom50', 'plusMinusPoints_prom50',
@@ -134,11 +137,11 @@ def predecir_desde_ids(entrada: EquiposInput):
         'IMPACTO_MVP', 'home'
     ]
 
-    v1 = [eq1.get(k, 0) for k in claves_modelo]
-    v2 = [eq2.get(k, 0) for k in claves_modelo]
+    v1 = [eq1.get(k, 0) for k in claves]
+    v2 = [eq2.get(k, 0) for k in claves]
     diferencia = np.array(v1) - np.array(v2)
 
-    X = pd.DataFrame([diferencia], columns=[f'entreno_{k}' for k in claves_modelo])
+    X = pd.DataFrame([diferencia], columns=[f'entreno_{k}' for k in claves])
     X_imputado = imputador.transform(X)
     X_escalado = escalador.transform(X_imputado)
     probabilidad = modelo.predict_proba(X_escalado)[0][1]
@@ -147,7 +150,7 @@ def predecir_desde_ids(entrada: EquiposInput):
 
 @app.post("/predecir-estadisticas")
 def predecir_con_estadisticas(datos: EstadisticasEquipos):
-    frontend_a_modelo = {
+    mapeo = {
         'teamScore': 'teamScore_prom50',
         'assists': 'assists_prom50',
         'blocks': 'blocks_prom50',
@@ -169,23 +172,18 @@ def predecir_con_estadisticas(datos: EstadisticasEquipos):
         'isHome': 'home'
     }
 
-    claves_modelo = list(frontend_a_modelo.values())
+    claves = list(mapeo.values())
 
-    datos_procesados = {}
-    for clave_equipo, datos_equipo in [("equipo1", datos.equipo1), ("equipo2", datos.equipo2)]:
-        datos_procesados[clave_equipo] = {}
-        for clave_frontend, valor in datos_equipo.items():
-            if clave_frontend in frontend_a_modelo:
-                clave_modelo = frontend_a_modelo[clave_frontend]
-                datos_procesados[clave_equipo][clave_modelo] = valor
+    d1 = {mapeo[k]: v for k, v in datos.equipo1.items() if k in mapeo}
+    d2 = {mapeo[k]: v for k, v in datos.equipo2.items() if k in mapeo}
 
-    v1 = [datos_procesados["equipo1"].get(k, 0) for k in claves_modelo]
-    v2 = [datos_procesados["equipo2"].get(k, 0) for k in claves_modelo]
-
+    v1 = [d1.get(k, 0) for k in claves]
+    v2 = [d2.get(k, 0) for k in claves]
     diferencia = np.array(v1) - np.array(v2)
-    X = pd.DataFrame([diferencia], columns=[f'entreno_{k}' for k in claves_modelo])
+
+    X = pd.DataFrame([diferencia], columns=[f'entreno_{k}' for k in claves])
     X_imputado = imputador.transform(X)
     X_escalado = escalador.transform(X_imputado)
     probabilidad = modelo.predict_proba(X_escalado)[0][1]
 
-    return {"probabilidad_victoria_local": round(probabilidad * 100, 2)} 
+    return {"probabilidad_victoria_local": round(probabilidad * 100, 2)}
