@@ -4,14 +4,17 @@ import joblib
 import numpy as np
 import pandas as pd
 import json
+import time
 from fastapi.middleware.cors import CORSMiddleware
+from nba_api.stats.static import teams as nba_teams
+from nba_api.stats.endpoints import teamgamelog, boxscoretraditionalv2, playergamelog
 
 # Cargar modelos
 modelo = joblib.load("../modelo-definitivo/mejor_modelo.pkl")
 escalador = joblib.load("../modelo-definitivo/escalado_equipo.pkl")
 imputador = joblib.load("../modelo-definitivo/imputo_equipo.pkl")
 
-# Cargar estadísticas precalculadas
+# Estadísticas precalculadas como respaldo
 with open("estadisticas_precalculadas.json") as f:
     estadisticas_cacheadas = json.load(f)
 
@@ -34,19 +37,92 @@ class EstadisticasEquipos(BaseModel):
     equipo1: dict
     equipo2: dict
 
+def obtener_estadisticas_equipo(id_equipo, temporada="2024-25"):
+    try:
+        registro_juegos = teamgamelog.TeamGameLog(team_id=id_equipo, season=temporada, season_type_all_star='Regular Season')
+        juegos = registro_juegos.get_data_frames()[0].head(10)
+
+        estadisticas_equipo = []
+        ids_mvp = []
+
+        for id_juego in juegos['Game_ID']:
+            caja = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=id_juego)
+            df_jugadores = caja.get_data_frames()[0]
+            df_equipos = caja.get_data_frames()[1]
+
+            jugadores_equipo = df_jugadores[df_jugadores['TEAM_ID'] == id_equipo]
+            if jugadores_equipo.empty:
+                continue
+
+            mvp = jugadores_equipo.sort_values(by='PTS', ascending=False).iloc[0]
+            ids_mvp.append(mvp['PLAYER_ID'])
+
+            fila_equipo = df_equipos[df_equipos['TEAM_ID'] == id_equipo]
+            estadisticas_equipo.append(fila_equipo)
+            time.sleep(1)
+
+        if not estadisticas_equipo:
+            raise ValueError("Sin datos válidos NBA API")
+
+        df_todos = pd.concat(estadisticas_equipo)
+        perdidas_temp = df_todos['TO'].mean()
+
+        estadisticas = {
+            'teamScore_prom50': df_todos['PTS'].mean(),
+            'assists_prom50': df_todos['AST'].mean(),
+            'reboundsTotal_prom50': df_todos['REB'].mean(),
+            'steals_prom50': df_todos['STL'].mean(),
+            'blocks_prom50': df_todos['BLK'].mean(),
+            'fieldGoalsPercentage_prom50': df_todos['FG_PCT'].mean(),
+            'freeThrowsPercentage_prom50': df_todos['FT_PCT'].mean(),
+            'threePointersPercentage_prom50': df_todos['FG3_PCT'].mean(),
+            'plusMinusPoints_prom50': df_todos['PLUS_MINUS'].mean(),
+            'eficiencia_ofensiva_prom50': df_todos['PTS'].mean() / (perdidas_temp + 1),
+            'impacto_defensa_prom50': df_todos['STL'].mean() + df_todos['BLK'].mean(),
+            'ratio_asistencias_turnovers_prom50': df_todos['AST'].mean() / (perdidas_temp + 1),
+            'eficiencia_tiro_prom50': (df_todos['FG_PCT'].mean() + df_todos['FG3_PCT'].mean()) / 2,
+            'home': 1
+        }
+
+        # MVP Stats
+        puntos, asistencias, rebotes, fg_pct = [], [], [], []
+        for pid in set(ids_mvp):
+            df_mvp = playergamelog.PlayerGameLog(player_id=pid, season=temporada).get_data_frames()[0].head(10)
+            puntos.append(df_mvp['PTS'].mean())
+            asistencias.append(df_mvp['AST'].mean())
+            rebotes.append(df_mvp['REB'].mean())
+            fg_pct.append(df_mvp['FG_PCT'].mean())
+            time.sleep(1)
+
+        estadisticas.update({
+            'MVP_PTS': np.mean(puntos) if puntos else 0,
+            'MVP_AST': np.mean(asistencias) if asistencias else 0,
+            'MVP_REB': np.mean(rebotes) if rebotes else 0,
+            'MVP_FG_PCT': np.mean(fg_pct) if fg_pct else 0,
+        })
+        estadisticas['IMPACTO_MVP'] = (
+            estadisticas['MVP_PTS'] * 1.0 + 
+            estadisticas['MVP_AST'] * 0.7 + 
+            estadisticas['MVP_REB'] * 0.5 + 
+            10 * 0.3
+        )
+
+        return estadisticas
+
+    except Exception as e:
+        print(f"⚠️ Error al obtener datos desde NBA API: {e}")
+        return estadisticas_cacheadas.get(str(id_equipo), {})
+
 @app.get("/equipos")
 def obtener_equipos():
-    # Puedes reemplazar esto por una lista fija si prefieres
-    from nba_api.stats.static import teams as nba_teams
-    todos_equipos = nba_teams.get_teams()
-    equipos = [{"id": t["id"], "name": t["full_name"]} for t in sorted(todos_equipos, key=lambda x: x["full_name"])]
-    return equipos
+    equipos = nba_teams.get_teams()
+    return [{"id": e["id"], "name": e["full_name"]} for e in sorted(equipos, key=lambda x: x["full_name"])]
 
 @app.post("/predecir")
 def predecir_desde_ids(entrada: EquiposInput):
-    eq1 = estadisticas_cacheadas[str(entrada.equipo1_id)]
-    eq2 = estadisticas_cacheadas[str(entrada.equipo2_id)]
-    eq2["home"] = 0  # visitante
+    eq1 = obtener_estadisticas_equipo(entrada.equipo1_id)
+    eq2 = obtener_estadisticas_equipo(entrada.equipo2_id)
+    eq2["home"] = 0  # Visitante
 
     claves_modelo = [
         'teamScore_prom50', 'assists_prom50', 'blocks_prom50', 'steals_prom50',
@@ -105,12 +181,11 @@ def predecir_con_estadisticas(datos: EstadisticasEquipos):
 
     v1 = [datos_procesados["equipo1"].get(k, 0) for k in claves_modelo]
     v2 = [datos_procesados["equipo2"].get(k, 0) for k in claves_modelo]
-    diferencia = np.array(v1) - np.array(v2)
 
+    diferencia = np.array(v1) - np.array(v2)
     X = pd.DataFrame([diferencia], columns=[f'entreno_{k}' for k in claves_modelo])
     X_imputado = imputador.transform(X)
     X_escalado = escalador.transform(X_imputado)
     probabilidad = modelo.predict_proba(X_escalado)[0][1]
 
-    return {"probabilidad_victoria_local": round(probabilidad * 100, 2)}
-
+    return {"probabilidad_victoria_local": round(probabilidad * 100, 2)} 
